@@ -14,6 +14,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 
 from users.models import User
 
+
 # Create your views here.
 
 class UserCountAPIView(APIView):
@@ -66,6 +67,41 @@ class BannerList(APIView):
 
 class CalculateCostAPIView(APIView):
     permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            region = request.query_params.get('region')
+            seed_name = request.query_params.get('seed')
+            areas_to_sow = request.query_params.get('areas_to_sow')
+
+            if not region or not seed_name or not areas_to_sow:
+                return Response({'error': 'Регион, имя семени и площадь для посева обязательны.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            areas_to_sow = int(areas_to_sow)
+            try:
+                area = Area.objects.get(name=region)
+            except Area.DoesNotExist:
+                return Response({'error': 'Регион не существует'}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                seed = Seed.objects.get(name=seed_name, area=area)
+            except Seed.DoesNotExist:
+                return Response({'error': 'Семя не существует в указанном регионе'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            seed_cost = seed.price * areas_to_sow if seed.price else 0
+
+            response_data = {
+                'region': region,
+                'seed': seed_name,
+                'areas_to_sow': areas_to_sow,
+                'seed_cost': seed_cost
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def post(self, request):
         try:
