@@ -1,0 +1,1 @@
+xammasi yaxshi
