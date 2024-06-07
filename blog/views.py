@@ -1,3 +1,5 @@
+from django.shortcuts import get_object_or_404
+
 from .serializers import *
 from django.db.models import Sum
 from rest_framework.permissions import AllowAny
@@ -264,3 +266,29 @@ class CalculateCostAPIView(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class MemsList(APIView):
+    def get(self, request, format=None):
+        mems = Mems.objects.all()
+        serializer = MemsSerializer(mems, many=True)
+        return Response(serializer.data)
+class MemsDetails(APIView):
+
+    def get(self, request, pk, format=None):
+        mem = get_object_or_404(Mems, pk=pk)
+        serializer = MemsSerializer(mem)
+        return Response(serializer.data)
+
+    def put(self, request, pk, format=None):
+        mem = get_object_or_404(Mems, pk=pk)
+        serializer = MemsSerializer(mem, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk, format=None):
+        mem = get_object_or_404(Mems, pk=pk)
+        mem.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

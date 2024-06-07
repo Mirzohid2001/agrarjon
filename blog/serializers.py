@@ -53,3 +53,8 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
+
+class MemsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Mems
+        fields = '__all__'
