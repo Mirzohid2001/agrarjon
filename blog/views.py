@@ -87,7 +87,6 @@ class CalculateCostAPIView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
     def post(self, request):
         try:
             region = request.data.get('region')
@@ -100,26 +99,24 @@ class CalculateCostAPIView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
 
             areas_to_sow = int(areas_to_sow)
-            try:
-                area = Area.objects.get(name=region)
-            except Area.DoesNotExist:
+            area = Area.objects.filter(name=region).first()
+            if not area:
                 return Response({'error': 'Регион не существует'}, status=status.HTTP_400_BAD_REQUEST)
 
-            try:
-                seed = Seed.objects.get(name=seed_name, area=area)
-            except Seed.DoesNotExist:
+            seed = Seed.objects.filter(name=seed_name, area=area).first()
+            if not seed:
                 return Response({'error': 'Семя не существует в указанном регионе'},
                                 status=status.HTTP_400_BAD_REQUEST)
 
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
+            user = User.objects.filter(id=user_id).first()
+            if not user:
                 return Response({'error': 'Пользователь не существует'}, status=status.HTTP_400_BAD_REQUEST)
 
             workers = Worker.objects.filter(area=area, seed=seed)
             tractors = Tractor.objects.filter(area=area, seed=seed)
             fertilisers = Fertiliser.objects.filter(area=area, seed=seed)
             work_types = WorkType.objects.filter(traktor__area=area, seed=seed)
+
             seed_cost = seed.price * areas_to_sow if seed.price else 0
 
             worker_cost_details = [
@@ -249,6 +246,7 @@ class CalculateCostAPIView(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class MemsList(APIView):
