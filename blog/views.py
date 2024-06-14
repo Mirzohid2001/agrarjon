@@ -1,7 +1,7 @@
 from django.shortcuts import get_object_or_404
 
 from .serializers import *
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -13,6 +13,7 @@ import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
+from .models import *
 
 from users.models import User
 
@@ -67,6 +68,33 @@ class BannerList(APIView):
         return Response(serializer.data)
 
 
+
+def create_sheet_with_data(wb, title, df):
+    ws = wb.create_sheet(title=title)
+    for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
+        for c_idx, value in enumerate(row, 1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=value)
+            cell.border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                                 top=Side(style='thin'), bottom=Side(style='thin'))
+            if r_idx == 1:
+                cell.fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for column in ws.columns:
+        max_length = 0
+        column = list(column)
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        ws.column_dimensions[column[0].column_letter].width = adjusted_width
+
 class CalculateCostAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -78,9 +106,14 @@ class CalculateCostAPIView(APIView):
             seeds = Seed.objects.all()
             seed_list = [{'id': seed.id, 'name': seed.name, 'area': seed.area.name} for seed in seeds]
 
+            trees = Tree.objects.all()
+            tree_list = [{'id': tree.id, 'name': tree.name, 'area': tree.area.name} for tree in trees]
+
             response_data = {
                 'regions': region_list,
-                'seeds': seed_list
+                'plant_types': ['seed', 'tree'],
+                'seeds': seed_list,
+                'trees': tree_list
             }
 
             return Response(response_data, status=status.HTTP_200_OK)
@@ -90,90 +123,151 @@ class CalculateCostAPIView(APIView):
     def post(self, request):
         try:
             region = request.data.get('region')
-            seed_name = request.data.get('seed')
+            plant_type = request.data.get('plant_type')
+            plant_name = request.data.get('plant_name')
             areas_to_sow = request.data.get('areas_to_sow')
+            unit = request.data.get('unit', 'hectare')
             user_id = request.data.get('user_id')
 
-            if not region or not seed_name or not areas_to_sow or not user_id:
-                return Response({'error': 'Регион, имя семени, площадь для посева и ID пользователя обязательны.'},
+            if not region or not plant_type or not plant_name or not areas_to_sow or not user_id:
+                return Response({'error': 'Регион, тип растения, имя растения, площадь для посева и ID пользователя обязательны.'},
                                 status=status.HTTP_400_BAD_REQUEST)
 
-            areas_to_sow = int(areas_to_sow)
+            areas_to_sow = float(areas_to_sow)
+            if unit == 'sotix':
+                areas_to_sow /= 100  # 1 gektar = 100 sotix
+
             area = Area.objects.filter(name=region).first()
             if not area:
                 return Response({'error': 'Регион не существует'}, status=status.HTTP_400_BAD_REQUEST)
-
-            seed = Seed.objects.filter(name=seed_name, area=area).first()
-            if not seed:
-                return Response({'error': 'Семя не существует в указанном регионе'},
-                                status=status.HTTP_400_BAD_REQUEST)
 
             user = User.objects.filter(id=user_id).first()
             if not user:
                 return Response({'error': 'Пользователь не существует'}, status=status.HTTP_400_BAD_REQUEST)
 
-            workers = Worker.objects.filter(area=area, seed=seed)
-            tractors = Tractor.objects.filter(area=area, seed=seed)
-            fertilisers = Fertiliser.objects.filter(area=area, seed=seed)
-            work_types = WorkType.objects.filter(traktor__area=area, seed=seed)
+            total_cost = 0
 
-            seed_cost = seed.price * areas_to_sow if seed.price else 0
+            categories = []
+            unit_prices = []
+            costs_per_unit = []
+            total_costs = []
 
-            worker_cost_details = [
-                {'hours': worker.hour, 'unit_price': worker.salary, 'total': worker.salary * worker.hour} for worker in
-                workers if worker.salary and worker.hour]
-            worker_cost = sum(item['total'] for item in worker_cost_details)
+            if plant_type == 'seed':
+                seed = Seed.objects.filter(name=plant_name, area=area).first()
+                if not seed:
+                    return Response({'error': 'Семя не существует в указанном регионе'}, status=status.HTTP_400_BAD_REQUEST)
 
-            tractor_cost_details = [
-                {'hours': tractor.hour, 'unit_price': tractor.price, 'total': tractor.price * tractor.hour} for tractor
-                in tractors if tractor.price and tractor.hour]
-            tractor_cost = sum(item['total'] for item in tractor_cost_details)
+                seed_cost = seed.price * areas_to_sow
+                total_cost += seed_cost
 
-            fertiliser_cost_details = [{'unit_price': fertiliser.price, 'total': fertiliser.price} for fertiliser in
-                                       fertilisers if fertiliser.price]
-            fertiliser_cost = sum(item['total'] for item in fertiliser_cost_details)
+                categories.append('Семена')
+                unit_prices.append(seed.price)
+                costs_per_unit.append(seed.price)
+                total_costs.append(seed_cost)
 
-            work_type_cost_details = [{'work_hours': work_type.traktor.hour, 'unit_price': work_type.traktor.price,
-                                       'total': work_type.traktor.price * work_type.traktor.hour} for work_type in
-                                      work_types if work_type.traktor.price and work_type.traktor.hour]
-            work_type_cost = sum(item['total'] for item in work_type_cost_details)
+                workers = Worker.objects.filter(area=area, seed=seed)
+                tractors = Tractor.objects.filter(area=area, seed=seed)
 
-            total_cost = seed_cost + worker_cost + tractor_cost + fertiliser_cost + work_type_cost
-            cost_per_hectare = total_cost / areas_to_sow if areas_to_sow else 0
+            elif plant_type == 'tree':
+                tree = Tree.objects.filter(name=plant_name, area=area).first()
+                if not tree:
+                    return Response({'error': 'Дерево не существует в указанном регионе'}, status=status.HTTP_400_BAD_REQUEST)
+
+                spacing = 4
+                trees_per_hectare = (10000 / (spacing * spacing))
+                trees_needed = trees_per_hectare * areas_to_sow
+
+                tree_cost = tree.price * trees_needed
+                total_cost += tree_cost
+
+                categories.append('Деревья')
+                unit_prices.append(tree.price)
+                costs_per_unit.append(tree.price * trees_per_hectare)
+                total_costs.append(tree_cost)
+
+                workers = Worker.objects.filter(area=area, tree=tree)
+                tractors = Tractor.objects.filter(area=area, tree=tree)
+
+            else:
+                return Response({'error': 'Неправильный тип растения'}, status=status.HTTP_400_BAD_REQUEST)
+
+            for worker in workers:
+                worker_assignments = WorkerTariffAssignment.objects.filter(worker=worker)
+                for assignment in worker_assignments:
+                    tariff = assignment.tariff
+                    hours = assignment.hours
+                    worker_total_cost = tariff.wage_for_7_hours * hours * areas_to_sow
+                    categories.append(f'Рабочие (Разряд {tariff.name})')
+                    unit_prices.append(tariff.wage_for_7_hours)
+                    costs_per_unit.append(tariff.wage_for_7_hours * hours)
+                    total_costs.append(worker_total_cost)
+                    total_cost += worker_total_cost
+
+            for tractor in tractors:
+                tractor_assignments = TractorTariffAssignment.objects.filter(tractor=tractor)
+                for assignment in tractor_assignments:
+                    tariff = assignment.tariff
+                    hours = assignment.hours
+                    tractor_total_cost = tariff.wage_for_7_hours * hours * areas_to_sow
+                    categories.append(f'Тракторы (Разряд {tariff.name})')
+                    unit_prices.append(tariff.wage_for_7_hours)
+                    costs_per_unit.append(tariff.wage_for_7_hours * hours)
+                    total_costs.append(tractor_total_cost)
+                    total_cost += tractor_total_cost
+            fertilisers = Fertiliser.objects.filter(area=area, seed=seed) if plant_type == 'seed' else Fertiliser.objects.filter(area=area, tree=tree)
+            fertiliser_needed_per_hectare = 100
+            fertiliser_total_cost = 0
+
+            for fertiliser in fertilisers:
+                fertiliser_cost_per_kg = fertiliser.price_per_kg
+                fertiliser_cost_per_unit = fertiliser_cost_per_kg * fertiliser_needed_per_hectare
+                total_fertiliser_cost = fertiliser_cost_per_unit * areas_to_sow
+                fertiliser_total_cost += total_fertiliser_cost
+
+                categories.append(f'Удобрения ({fertiliser.name})')
+                unit_prices.append(fertiliser.price_per_kg)
+                costs_per_unit.append(fertiliser_cost_per_unit)
+                total_costs.append(total_fertiliser_cost)
+
+            total_cost += fertiliser_total_cost
+
+            # Work types
+            work_types = WorkType.objects.filter(Q(worker_tariff__isnull=False) | Q(tractor_tariff__isnull=False))
+            work_type_total_cost = 0
+
+            for work_type in work_types:
+                work_type_hours = work_type.hours
+                if work_type.worker_tariff:
+                    worker_cost = work_type.worker_tariff.wage_for_7_hours * work_type_hours * areas_to_sow
+                    categories.append(f'Тип работы (Рабочий, Разряд {work_type.worker_tariff.name})')
+                    unit_prices.append(work_type.worker_tariff.wage_for_7_hours)
+                    costs_per_unit.append(work_type.worker_tariff.wage_for_7_hours * work_type_hours)
+                    total_costs.append(worker_cost)
+                    total_cost += worker_cost
+
+                if work_type.tractor_tariff:
+                    tractor_cost = work_type.tractor_tariff.wage_for_7_hours * work_type_hours * areas_to_sow
+                    categories.append(f'Тип работы (Трактор, Разряд {work_type.tractor_tariff.name})')
+                    unit_prices.append(work_type.tractor_tariff.wage_for_7_hours)
+                    costs_per_unit.append(work_type.tractor_tariff.wage_for_7_hours * work_type_hours)
+                    total_costs.append(tractor_cost)
+                    total_cost += tractor_cost
+
+            categories.append('Итого')
+            unit_prices.append('')
+            costs_per_unit.append('')
+            total_costs.append(total_cost)
 
             summary_data = {
-                'Категория': ['Семена', 'Рабочие', 'Тракторы', 'Удобрения', 'Типы работ', 'Итого'],
-                'За единицу': [seed.price, '', '', '', '', ''],
-                'Стоимость за гектар': [seed.price, worker_cost / areas_to_sow, tractor_cost / areas_to_sow,
-                                        fertiliser_cost / areas_to_sow, work_type_cost / areas_to_sow,
-                                        cost_per_hectare],
-                'Общая стоимость': [seed_cost, worker_cost, tractor_cost, fertiliser_cost, work_type_cost, total_cost]
+                'Категория': categories,
+                'За единицу': unit_prices,
+                'Стоимость за единицу': costs_per_unit,
+                'Общая стоимость': total_costs
             }
             summary_df = pd.DataFrame(summary_data)
 
-            worker_df = pd.DataFrame(worker_cost_details)
-            worker_df.insert(0, 'Категория', 'Рабочие')
-            worker_df.insert(3, 'За единицу', worker_df['unit_price'])
-            worker_df.rename(columns={'unit_price': 'Стоимость'}, inplace=True)
-
-            tractor_df = pd.DataFrame(tractor_cost_details)
-            tractor_df.insert(0, 'Категория', 'Тракторы')
-            tractor_df.insert(3, 'За единицу', tractor_df['unit_price'])
-            tractor_df.rename(columns={'unit_price': 'Стоимость'}, inplace=True)
-
-            fertiliser_df = pd.DataFrame(fertiliser_cost_details)
-            fertiliser_df.insert(0, 'Категория', 'Удобрения')
-            fertiliser_df.insert(2, 'За единицу', fertiliser_df['unit_price'])
-            fertiliser_df.rename(columns={'unit_price': 'Стоимость'}, inplace=True)
-
-            work_type_df = pd.DataFrame(work_type_cost_details)
-            work_type_df.insert(0, 'Категория', 'Типы работ')
-            work_type_df.insert(3, 'За единицу', work_type_df['unit_price'])
-            work_type_df.rename(columns={'unit_price': 'Стоимость'}, inplace=True)
-
             excel_file = io.BytesIO()
             wb = Workbook()
-
             summary_ws = wb.active
             summary_ws.title = "Сводка"
 
@@ -201,36 +295,7 @@ class CalculateCostAPIView(APIView):
                 adjusted_width = (max_length + 2)
                 summary_ws.column_dimensions[column[0].column_letter].width = adjusted_width
 
-            def create_sheet_with_data(wb, title, df):
-                ws = wb.create_sheet(title=title)
-                for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
-                    for c_idx, value in enumerate(row, 1):
-                        cell = ws.cell(row=r_idx, column=c_idx, value=value)
-                        cell.border = Border(left=Side(style='thin'), right=Side(style='thin'),
-                                             top=Side(style='thin'), bottom=Side(style='thin'))
-                        if r_idx == 1:
-                            cell.fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
-                            cell.font = Font(bold=True, color="FFFFFF")
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                        else:
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-
-                for column in ws.columns:
-                    max_length = 0
-                    column = list(column)
-                    for cell in column:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    adjusted_width = (max_length + 2)
-                    ws.column_dimensions[column[0].column_letter].width = adjusted_width
-
-            create_sheet_with_data(wb, "Рабочие", worker_df)
-            create_sheet_with_data(wb, "Тракторы", tractor_df)
-            create_sheet_with_data(wb, "Удобрения", fertiliser_df)
-            create_sheet_with_data(wb, "Типы работ", work_type_df)
+            create_sheet_with_data(wb, "Сводка", summary_df)
 
             wb.save(excel_file)
             excel_file.seek(0)
@@ -248,12 +313,13 @@ class CalculateCostAPIView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 class MemsList(APIView):
     def get(self, request, format=None):
         mems = Mems.objects.all()
         serializer = MemsSerializer(mems, many=True)
         return Response(serializer.data)
+
+
 class MemsDetails(APIView):
 
     def get(self, request, pk, format=None):

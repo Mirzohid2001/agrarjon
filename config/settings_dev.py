@@ -3,7 +3,7 @@ DEBUG = True
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'agrarchik',
+        'NAME': 'misha_agrarka',
         'USER': 'postgres',
         'PASSWORD': '20010508',
         'HOST': 'localhost',

@@ -23,18 +23,14 @@ class Area(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        super(Area, self).save(*args, **kwargs)
-
     class Meta:
         db_table = 'areas'
-
-    class Meta:
         verbose_name = 'Место'
         verbose_name_plural = 'Места'
 
     def __str__(self):
         return self.name
+
 
 class Seed(models.Model):
     name = models.CharField(max_length=255)
@@ -43,18 +39,30 @@ class Seed(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        super(Seed, self).save(*args, **kwargs)
-
     class Meta:
         db_table = 'seeds'
+        verbose_name = 'Семя'
+        verbose_name_plural = 'Семена'
 
     def __str__(self):
         return self.name
 
+
+class Tree(models.Model):
+    name = models.CharField(max_length=255)
+    price = models.IntegerField()
+    area = models.ForeignKey(Area, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        verbose_name = 'Семя'
-        verbose_name_plural = 'Семена'
+        db_table = 'trees'
+        verbose_name = 'Дерево'
+        verbose_name_plural = 'Деревья'
+
+    def __str__(self):
+        return self.name
+
 
 class Oil(models.Model):
     name = models.CharField(max_length=255)
@@ -62,56 +70,102 @@ class Oil(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        super(Oil, self).save(*args, **kwargs)
-
     class Meta:
         db_table = 'oils'
 
+    def __str__(self):
+        return self.name
+
+class WorkerTariff(models.Model):
+    name = models.CharField(max_length=255)
+    coefficient = models.FloatField()
+    monthly_wage = models.IntegerField()
+    daily_wage = models.FloatField()
+    weekly_wage = models.FloatField()
+    wage_with_coefficient = models.IntegerField()
+    wage_for_7_hours = models.FloatField()
+
+    class Meta:
+        db_table = 'worker_tariffs'
+        verbose_name = 'Тариф работника'
+        verbose_name_plural = 'Тарифы работников'
 
     def __str__(self):
         return self.name
+
+
+class TractorTariff(models.Model):
+    name = models.CharField(max_length=255)
+    coefficient = models.FloatField()
+    monthly_wage = models.IntegerField()
+    daily_wage = models.FloatField()
+    weekly_wage = models.FloatField()
+    wage_with_coefficient = models.IntegerField()
+    wage_for_7_hours = models.FloatField()
+
+    class Meta:
+        db_table = 'tractor_tariffs'
+        verbose_name = 'Тариф трактора'
+        verbose_name_plural = 'Тарифы тракторов'
+
+    def __str__(self):
+        return self.name
+
 
 class Tractor(models.Model):
     name = models.CharField(max_length=255)
     oil = models.ForeignKey(Oil, on_delete=models.CASCADE)
-    seed = models.ForeignKey(Seed, on_delete=models.CASCADE)
+    seed = models.ForeignKey(Seed, on_delete=models.CASCADE, null=True, blank=True)
+    tree = models.ForeignKey(Tree, on_delete=models.CASCADE, null=True, blank=True)
     area = models.ForeignKey(Area, on_delete=models.CASCADE)
-    hour = models.IntegerField()
-    price = models.IntegerField()
+    tariffs = models.ManyToManyField(TractorTariff)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        super(Tractor, self).save(*args, **kwargs)
-
     class Meta:
         db_table = 'tractors'
+        verbose_name = 'Трактор'
+        verbose_name_plural = 'Тракторы'
 
     def __str__(self):
         return self.name
 
-    class Meta:
-        verbose_name = 'Трактор'
-        verbose_name_plural = 'Тракторы'
 
 class Worker(models.Model):
     area = models.ForeignKey(Area, on_delete=models.CASCADE)
-    seed = models.ForeignKey(Seed, on_delete=models.CASCADE)
-    salary = models.IntegerField()
-    hour = models.IntegerField()
+    seed = models.ForeignKey(Seed, on_delete=models.CASCADE, null=True, blank=True)
+    tree = models.ForeignKey(Tree, on_delete=models.CASCADE, null=True, blank=True)
+    tariffs = models.ManyToManyField(WorkerTariff)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        super(Worker, self).save(*args, **kwargs)
-
     class Meta:
         db_table = 'workers'
-
-    class Meta:
         verbose_name = 'Работник'
         verbose_name_plural = 'Работники'
+
+class WorkerTariffAssignment(models.Model):
+    worker = models.ForeignKey(Worker, on_delete=models.CASCADE)
+    tariff = models.ForeignKey(WorkerTariff, on_delete=models.CASCADE)
+    hours = models.IntegerField()
+
+    class Meta:
+        db_table = 'worker_tariff_assignments'
+        verbose_name = 'Назначение тарифа работника'
+        verbose_name_plural = 'Назначения тарифов работников'
+
+
+class TractorTariffAssignment(models.Model):
+    tractor = models.ForeignKey(Tractor, on_delete=models.CASCADE)
+    tariff = models.ForeignKey(TractorTariff, on_delete=models.CASCADE)
+    hours = models.IntegerField()
+
+    class Meta:
+        db_table = 'tractor_tariff_assignments'
+        verbose_name = 'Назначение тарифа трактора'
+        verbose_name_plural = 'Назначения тарифов тракторов'
+
+
 
 class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
@@ -119,60 +173,48 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-
-    def save(self, *args, **kwargs):
-        super(Order, self).save(*args, **kwargs)
-
     class Meta:
         db_table = 'orders'
-
-    class Meta:
         verbose_name = 'Заказ'
         verbose_name_plural = 'Заказы'
 
 
 class Fertiliser(models.Model):
     name = models.CharField(max_length=255)
-    price = models.IntegerField()
+    price_per_kg = models.IntegerField()
     area = models.ForeignKey(Area, on_delete=models.CASCADE)
-    seed = models.ForeignKey(Seed, on_delete=models.CASCADE)
+    seed = models.ForeignKey(Seed, on_delete=models.CASCADE, null=True, blank=True)
+    tree = models.ForeignKey(Tree, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        super(Fertiliser, self).save(*args, **kwargs)
-
     class Meta:
         db_table = 'fertilisers'
-
-    class Meta:
         verbose_name = 'Удобрение'
         verbose_name_plural = 'Удобрения'
 
     def __str__(self):
         return self.name
 
+
 class WorkType(models.Model):
     name = models.CharField(max_length=255)
-    seed = models.ForeignKey(Seed, on_delete=models.CASCADE)
-    worker = models.ForeignKey(Worker, on_delete=models.CASCADE)
-    traktor = models.ForeignKey(Tractor, on_delete=models.CASCADE)
-    hour = models.IntegerField()
+    seed = models.ForeignKey(Seed, on_delete=models.CASCADE, null=True, blank=True)
+    tree = models.ForeignKey(Tree, on_delete=models.CASCADE, null=True, blank=True)
+    worker_tariff = models.ForeignKey(WorkerTariff, on_delete=models.CASCADE, null=True, blank=True)
+    tractor_tariff = models.ForeignKey(TractorTariff, on_delete=models.CASCADE, null=True, blank=True)
+    hours = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = 'work_types'
         verbose_name = 'Тип работы'
         verbose_name_plural = 'Типы работы'
 
-    def save(self, *args, **kwargs):
-        super(WorkType, self).save(*args, **kwargs)
-
-    class Meta:
-        db_table = 'work_types'
-
     def __str__(self):
         return self.name
+
 
 class News(models.Model):
     title = models.CharField(max_length=255)
@@ -243,6 +285,7 @@ class Statistic(models.Model):
         verbose_name = 'Статистика'
         verbose_name_plural = 'Статистика'
 
+
 class Payment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
@@ -277,5 +320,3 @@ class Mems(models.Model):
     class Meta:
         verbose_name = 'Мем'
         verbose_name_plural = 'Мемы'
-
-
