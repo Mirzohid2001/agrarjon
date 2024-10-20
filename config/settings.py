@@ -26,7 +26,7 @@ SECRET_KEY = "django-insecure-x+c27jd2!n1)4!5^9mlnm%x7nh(znf7v7#!rv14o28y&!%mefq
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -133,6 +133,9 @@ STATICFILES_DIRS = [
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+PAYME_LOGIN = "Paycom"
+PAYME_PASSWORD = "yfJKzjyPBes#1id6m2r6nsoCSV4cNxUE3bgr"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field

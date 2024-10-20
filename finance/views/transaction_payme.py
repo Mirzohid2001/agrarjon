@@ -20,7 +20,7 @@ class TransactionPaymeListView(APIView):
         hasPermission = check_basic_auth(token)
 
         if hasPermission:
-            return hasPermission
+            return hasPermission        
 
         method = request.data.get('method')
         params = request.data.get('params', {})

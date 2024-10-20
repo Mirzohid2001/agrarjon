@@ -18,6 +18,14 @@ REVIEW_CHOICES = (
 )
 
 
+class Info(models.Model):
+    card_number = models.CharField("Номер карты для оплаты", max_length=19)
+    is_active = models.BooleanField("Активная", default=False, unique=True)
+
+    def __str__(self):
+        return "Активный" if self.is_active else "Не активный"
+
+
 class Area(models.Model):
     name = models.CharField(max_length=255, choices=AREA_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -166,10 +174,11 @@ class TractorTariffAssignment(models.Model):
         verbose_name_plural = 'Назначения тарифов тракторов'
 
 
-
 class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
     excel_file = models.FileField(upload_to='excel_files/')
+    is_paid = models.BooleanField("Оплачено", default=False)
+    order_pwd = models.CharField("Пароль покупки", max_length=10, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

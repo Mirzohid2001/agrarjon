@@ -2,7 +2,7 @@ from django.shortcuts import get_object_or_404
 
 from .serializers import *
 from django.db.models import Sum, Q
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -16,6 +16,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from .models import *
 
 from users.models import User
+from blog.utils import generate_random_password
 
 
 # Create your views here.
@@ -304,10 +305,11 @@ class CalculateCostAPIView(APIView):
 
             order = Order.objects.create(
                 user=user,
-                excel_file=path
+                excel_file=path,
+                order_pwd=generate_random_password(),
             )
 
-            return Response({'file_path': path, 'order_id': order.id}, status=status.HTTP_201_CREATED)
+            return Response({'order_id': order.id, 'order_pwd': order.order_pwd}, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -339,3 +341,37 @@ class MemsDetails(APIView):
         mem = get_object_or_404(Mems, pk=pk)
         mem.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DownloadOrderAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        order_id = request.data.get('order_id')
+        order_pwd = request.data.get('order_pwd')
+
+        if not order_id or not order_pwd:
+            return Response({'error': 'order_id и order_pwd обязательны.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            order = Order.objects.get(id=order_id, order_pwd=order_pwd, is_paid=True)
+            file_path = order.excel_file.url
+            return Response({'file_path': file_path}, status=status.HTTP_200_OK)
+        except Order.DoesNotExist:
+            return Response({'error': 'Заказ не найден или не оплачен.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class AllOrdersAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        orders = Order.objects.filter(user=request.user).values('id', 'order_pwd', 'created_at', 'is_paid')
+        return Response(list(orders), status=status.HTTP_200_OK)
+
+
+class InfoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        active_info = get_object_or_404(Info, is_active=True)
+        return Response({'card': active_info.card_number}, status=status.HTTP_200_OK)

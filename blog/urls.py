@@ -9,5 +9,7 @@ urlpatterns = [
     path('seed-cost/', CalculateCostAPIView.as_view(), name='seed-cost'),
     path('mems/', MemsList.as_view(), name='mems'),
     path('mems/<int:pk>/', MemsDetails.as_view(), name='memsDetail'),
-
+    path('download-order/', DownloadOrderAPIView.as_view(), name='download-order'),
+    path('all-orders/', AllOrdersAPIView.as_view(), name='all-orders'),
+    path('info/', InfoAPIView.as_view(), name='info'),
 ]

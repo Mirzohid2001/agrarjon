@@ -23,8 +23,8 @@ def check_basic_auth(token: str):
     except Exception:
         pass
 
-    login = settings.PAYME_LOGIN
-    passw = settings.PAYME_PASSWORD
+    login = 'Paycom'
+    passw = 'yfJKzjyPBes#1id6m2r6nsoCSV4cNxUE3bgr'
     hasAuth = auth and len(auth.split(':')) > 1
     req_login = auth.split(':')[0] if hasAuth else None
     req_passw = auth.split(':')[1] if hasAuth else None
