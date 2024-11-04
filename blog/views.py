@@ -305,11 +305,10 @@ class CalculateCostAPIView(APIView):
 
             order = Order.objects.create(
                 user=user,
-                excel_file=path,
-                order_pwd=generate_random_password(),
+                excel_file=path
             )
 
-            return Response({'order_id': order.id, 'order_pwd': order.order_pwd}, status=status.HTTP_201_CREATED)
+            return Response({'file_path': path, 'order_id': order.id}, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
